@@ -1,100 +1,64 @@
 #import Oneliner from oneliner
 import logging
-import curses, curses.wrapper
+import urwid
+
+class RollingListWalker(urwid.SimpleListWalker):
+	def __init__(self, contents=None):
+		if contents == None:
+			 contents = []
+		urwid.SimpleListWalker.__init__(self, contents)
+	
+	def set_focus(self, position):
+		if position == 'end' and len(self.contents) > 0:
+			position = len(self.contents) - 1
+		urwid.SimpleListWalker.set_focus(self, position)
+	
+	def shift_focus(self, amount):
+		position = self.get_focus()[1]
+		if not position:
+			return
+		position += amount
+		if position < 0:
+			self.set_focus(0)
+		elif position >= len(self.contents):
+			self.set_focus(len(self.contents) - 1)
+		else:
+			self.set_focus(position)
 
 class OnelinerCurses(object):
 	def __init__(self, baseUrl, historyLength=500):
 		#self.oneliner = Oneliner(baseUrl, historyLength)
 		
-		self.commandHistory = []
-		self.commandIndex = 0
-		self.inputBuffer = ""
-		
 		self.log = logging.getLogger(self.__class__.__name__)
 		
-		self.InitCurses()
+		palette = [
+			('input', 'default', 'dark blue'),
+		]
+		
+		self.chat = RollingListWalker()
+		self.input = urwid.Edit("[not logged in] ", allow_tab=True, wrap='clip')
+		def inputHappend(edit, new_text):
+			if new_text == 'q':
+				raise urwid.ExitMainLoop()
+		urwid.connect_signal(self.input, 'change', inputHappend)
+		
+		frame = urwid.Frame(urwid.ListBox(self.chat), footer=urwid.AttrMap(self.input, 'input'))
+		frame.set_focus('footer')
+		def uhi(input):
+			if input == 'enter':
+				self.chat.append(urwid.Text(self.input.edit_text))
+				self.input.set_edit_text("")
+				self.chat.set_focus('end')
+			if input == 'page up':
+				self.chat.shift_focus(-5)
+			if input == 'page down':
+				self.chat.shift_focus(+5)
+		self.loop = urwid.MainLoop(frame, palette, unhandled_input=uhi)
 		
 		self.log.info("Oneliner curses frontend initialized")
 	
-	def InitCurses(self):
-		try:
-			# initialize standard screen
-			self.screen = curses.initscr()
-			# don't echo key input
-			curses.noecho()
-			# turn off buffered mode (so the program
-			# receives key presses without waiting for enter)
-			curses.cbreak()
-			# enable handling of special keys (like arrow keys)
-			# in curses
-			#self.screen.keypad(1)
-			# enable colors
-			curses.start_color()
-			
-			curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)
-			self.inputColor = curses.color_pair(1)
-		
-			# create the buffer window
-			(y,x) = self.screen.getmaxyx()
-			self.bufferWindow = curses.newwin(y - 1, x, 0, 0)
-			self.inputWindow = curses.newwin(1, x, y - 1, 0)
-			self.inputWindow.bkgd(" ", self.inputColor)
-			self.inputWindow.keypad(1)
-		except:
-			self.TerminateCurses()
-			raise
-	
-	def TerminateCurses(self):
-		#re-enable buffered input mode
-		curses.nocbreak()
-		# disable special key parsing (why?)
-		#self.screen.keypad(0)
-		# re-enable echoing
-		curses.echo()
-		# restore original operating mode
-		curses.endwin()
-	
-	def Resize(self):
-		(y,x) = self.screen.getmaxyx()
-		self.bufferWindow.mvwin(0, 0)
-		self.bufferWindow.resize(y - 1, x)
-		self.bufferWindow.noutrefresh()
-		self.inputWindow.mvwin(y - 1, 0)
-		self.inputWindow.resize(1, x)
-		self.inputWindow.noutrefresh()
-		self.screen.doupdate()
-	
 	def Run(self):
-		#curses.wrapper(self.RunImpl)
-		while True:
-			try:
-				# process input
-				ch = self.inputWindow.getch()
-				self.bufferWindow.addstr(str(ch)+"\n")
-				self.bufferWindow.refresh()
-				if ch == ord('q'):
-					return
-				elif ch == curses.KEY_RESIZE:
-					self.Resize()
-				elif ch == curses.KEY_UP:
-					self.CommandHistoryPrev()
-				elif ch == curses.KEY_DOWN:
-					self.CommandHistoryNext()
-				elif ch == ord("\n"): # enter
-					if len(self.inputBuffer) > 0:
-						self.bufferWindow.addstr(self.inputBuffer + "\n")
-						self.bufferWindow.refresh()
-					self.CommandEnter()
-				elif ch == curses.KEY_BACKSPACE or ch == 127: # backspace
-					self.inputBuffer = self.inputBuffer[:-1]
-					self.inputWindow.clear()
-					self.inputWindow.addstr(self.inputBuffer)
-				elif ch >= 32 and ch <= 255:
-					self.inputWindow.addch(ch, self.inputColor)
-					self.inputBuffer += chr(ch)
-			except:
-				self.TerminateCurses()
-				raise
+		self.loop.run()
 	
 	def CommandHistoryPrev(self):
 		if self.commandIndex > 0:
@@ -124,9 +88,5 @@ class OnelinerCurses(object):
 		self.inputBuffer = ""
 		self.inputWindow.clear()
 	
-	def RunImpl(self, key):
-		pass
-	
 	def __del__(self):
-		self.TerminateCurses()
 		self.log.info("Oneliner curses frontend destroyed")
