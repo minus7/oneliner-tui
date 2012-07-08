@@ -1,4 +1,6 @@
-import Oneliner from oneliner
+#!/usb/bin/python3
+
+from oneliner import Oneliner
 import logging
 
 if __name__ == "__main__":
