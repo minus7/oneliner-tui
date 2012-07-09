@@ -33,15 +33,15 @@ class Oneliner(object):
 		self.nextEvent = 0
 		
 		self.log = logging.getLogger(self.__class__.__name__)
-		self.log.info("Oneliner initialized")
+		self.log.info(u"Oneliner initialized")
 	
 	def Login(self, username, password):
-		raise NotImplementedError("Login not implemented")
+		raise NotImplementedError(u"Login not implemented")
 	
 	def Send(self, message):
 		if not self.loggedIn:
-			self.log.warning("Tried to send message without being logged in")
-		raise NotImplementedError("Sending not implemented")
+			self.log.warning(u"Tried to send message without being logged in")
+		raise NotImplementedError(u"Sending not implemented")
 	
 	def _Request(self, url, method="GET"):
 		"""
@@ -69,18 +69,18 @@ class Oneliner(object):
 		
 		# find next event ID
 		oldEvent = self.nextEvent
-		# lines is an array of bytes, accessing one byte yields an int
-		if lines[-1][0] == ord("!"):
+		# future remark: ord("!") required in python 3
+		if lines[-1][0] == "!":
 			self.nextEvent = int(lines[-1][1:])
-			self.log.debug("Next event ID: {}".format(self.nextEvent))
+			self.log.debug(u"Next event ID: {}".format(self.nextEvent))
 		else:
-			self.log.warning("Couldn't find the next event ID in message")
-			self.log.debug("Event data: {}".format(repr(data)))
+			self.log.warning(u"Couldn't find the next event ID in message")
+			self.log.debug(u"Event data: {}".format(repr(data)))
 		
-		if "oneliner" in lines or oldEvent == 0:
+		if u"oneliner" in lines or oldEvent == 0:
 			return True
 		else:
-			self.log.debug("No oneliner event, retrying")
+			self.log.debug(u"No oneliner event, retrying")
 			return False
 	
 	def ParseOneliner(self, data):
@@ -91,14 +91,15 @@ class Oneliner(object):
 		try:
 			oneliner = ElementTree.fromstring(data)
 		except ElementTree.ParseError as e:
-			self.log.error("Oneliner XML parsing failed: {}".format(str(e)))
+			self.log.error(u"Oneliner XML parsing failed: {}".format(str(e)))
 			return []
 		
-		self.log.debug("Oneliner data: {}...".format(repr(data[:20])))
+		self.log.debug(u"Oneliner data: {}...".format(repr(data[:20])))
 		
 		newLines = []
 		for msg in oneliner.iterfind('entry'):
 			# parses "Sun, 12 Feb 2012 01:00:48 +0100" (date offset is cut off for now)
+			# TODO: timezone offset parsing?
 			msgTime = datetime.datetime.strptime(msg.get('time')[:-6], "%a, %d %b %Y %H:%M:%S")
 			msgAuthor = msg.find('author').text
 			msgText = msg.find('message').text
@@ -113,7 +114,7 @@ class Oneliner(object):
 		newLines.reverse()
 		# append new stuff, removing old lines if necesssary
 		self.history = self.history[-self.historyLength+len(newLines):] + newLines
-		self.log.debug("Added {} new lines".format(len(newLines)))
+		self.log.debug(u"Added {} new lines".format(len(newLines)))
 		
 		return newLines
 	
