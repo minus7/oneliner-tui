@@ -1,37 +1,32 @@
-import urwid
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from twisted.internet.protocol import Protocol
 from twisted.web.client import Agent, HTTPConnectionPool, getPage
 from twisted.python.log import PythonLoggingObserver
-from StringIO import StringIO
 from oneliner import Oneliner
 
 
-class OnelinerTwistedUrwid(Oneliner, urwid.ListWalker):
+class OnelinerTwisted(Oneliner):
 	"""
-	async + ListWalker compatibility
+	Subclass of Oneliner using twisted's async http client
+	_Request/Monitor/GetNewLines return Deferreds
 	"""
 	
-	def __init__(self, baseUrl, historyLength=None, eventLoop=None):
+	def __init__(self, baseUrl, historyLength=50, reactor=None):
 		# use the standard python logging module
 		PythonLoggingObserver().start()
 		
-		if not eventLoop:
-			self.eventLoop = urwid.TwistedEventLoop()
-		else:
-			self.eventLoop = eventLoop
-		pool = HTTPConnectionPool(self.eventLoop.reactor, persistent=True)
-		pool.maxPersistentPerHost = 1
-		self.agent = Agent(self.eventLoop.reactor, pool=pool)
+		self._Setup(baseUrl, historyLength)
 		
-		if historyLength:
-			Oneliner.__init__(self, baseUrl, historyLength)
-		else:
-			Oneliner.__init__(self, baseUrl)
+		#if not reactor:
+		#	from twisted.internet import reactor as reactor_
+		#	reactor = reactor_
+		#self.reactor = reactor
+		#pool = HTTPConnectionPool(self.eventLoop.reactor, persistent=True)
+		#pool.maxPersistentPerHost = 1
+		#self.agent = Agent(self.eventLoop.reactor, pool=pool)
 		
-		# ListWalker focus
-		self.focus = 'end'
+		self.log.info(u"OnelinerTwisted initialized")
 	
 	def _LogErrback(self, error):
 		self.log.error(str(error))
@@ -63,27 +58,3 @@ class OnelinerTwistedUrwid(Oneliner, urwid.ListWalker):
 				self._modified()
 			self.Monitor()
 		deferredRequest.addCallback(GetNewLinesDone)
-	
-	# urwid ListWalker interface:
-	
-	def _GetAtPos(self, position):
-		if position == 'end':
-			position = len(self.history) - 1
-		if position < 0 or position >= len(self.history):
-			return (None, None)
-		msg = self.history[position]
-		text = u"[{}] {}: {}".format(msg.time, msg.author, msg.message)
-		return (urwid.Text(text), position)
-	
-	def get_focus(self):
-		return self._GetAtPos(self.focus)
-	
-	def set_focus(self, focus):
-		self.focus = focus
-		self._modified()
-	
-	def get_next(self, position):
-		return self._GetAtPos(position + 1)
-	
-	def get_prev(self, position):
-		return self._GetAtPos(position - 1)

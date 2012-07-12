@@ -1,4 +1,4 @@
-from oneliner_twistedurwid import OnelinerTwistedUrwid
+from async import OnelinerTwisted
 import logging
 import urwid
 
@@ -30,8 +30,46 @@ class InputEdit(urwid.Edit):
 			return urwid.Edit.keypress(self, size, key)
 		
 		return None
+	
+class OnelinerUrwid(OnelinerTwisted, urwid.ListWalker):
+	"""
+	ListWalker compatible Oneliner
+	"""
+	def __init__(self, baseUrl, historyLength=2000, eventLoop=None):
+		
+		if not eventLoop:
+			self.eventLoop = urwid.TwistedEventLoop()
+		else:
+			self.eventLoop = eventLoop
+		
+		OnelinerTwisted.__init__(self, baseUrl, historyLength=historyLength, reactor=eventLoop.reactor)
+		
+		# ListWalker focus
+		self.focus = 'end'
+	
+	def _GetAtPos(self, position):
+		if position == 'end':
+			position = len(self.history) - 1
+		if position < 0 or position >= len(self.history):
+			return (None, None)
+		msg = self.history[position]
+		text = u"[{}] {}: {}".format(msg.time, msg.author, msg.message)
+		return (urwid.Text(text), position)
+	
+	def get_focus(self):
+		return self._GetAtPos(self.focus)
+	
+	def set_focus(self, focus):
+		self.focus = focus
+		self._modified()
+	
+	def get_next(self, position):
+		return self._GetAtPos(position + 1)
+	
+	def get_prev(self, position):
+		return self._GetAtPos(position - 1)
 
-class OnelinerUICurses(object):
+class OnelinerUIUrwid(object):
 	def __init__(self, baseUrl, historyLength=500):
 		self.log = logging.getLogger(self.__class__.__name__)
 		
@@ -40,7 +78,7 @@ class OnelinerUICurses(object):
 		
 		self.eventLoop = urwid.TwistedEventLoop()
 		
-		self.oneliner = OnelinerTwistedUrwid(baseUrl, historyLength, self.eventLoop)
+		self.oneliner = OnelinerUrwid(baseUrl, historyLength, self.eventLoop)
 		
 		palette = [
 			('input', 'default', 'dark blue'),

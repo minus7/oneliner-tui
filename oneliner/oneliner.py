@@ -1,17 +1,9 @@
-#import http.client
-#from cookielib import MozillaCookieJar
+from httplib import HTTPConnection
 import re
 import datetime
 from xml.etree import ElementTree
 import logging
-
-#~ import sys
-#~ reload(sys)
-#~ sys.setdefaultencoding('utf8')
-
-#cj = MozillaCookieJar("mycookies.txt")
-#cj.load()
-#opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+from urlparse import urlparse
 
 class OnelinerMessage(object):
 	def __init__(self, author, message, time):
@@ -21,26 +13,29 @@ class OnelinerMessage(object):
 
 class Oneliner(object):
 	def __init__(self, baseUrl, historyLength=50):
+		self._Setup(baseUrl, historyLength)
+		
+		urlInfo = urlparse(baseUrl)
+		self.basePath = urlInfo.path
+		self.connection = HTTPConnection(urlInfo.netloc)
+		
+		self.log.info(u"Oneliner initialized")
+	
+	def _Setup(self, baseUrl, historyLength):
 		"""
-		host: host of the demovibes installation
 		historyLength: how many onelines to keep in the buffer
-		baseUrl: path to the demovibes installation
+		baseUrl: url to the base of the demovibes installation
 		"""
+		self.log = logging.getLogger(self.__class__.__name__)
 		self.baseUrl = baseUrl
-		#self.connection = http.client.HTTPConnection(host)
 		self.history = []
 		self.historyLength = historyLength
 		self.nextEvent = 0
-		
-		self.log = logging.getLogger(self.__class__.__name__)
-		self.log.info(u"Oneliner initialized")
 	
 	def Login(self, username, password):
 		raise NotImplementedError(u"Login not implemented")
 	
 	def Send(self, message):
-		if not self.loggedIn:
-			self.log.warning(u"Tried to send message without being logged in")
 		raise NotImplementedError(u"Sending not implemented")
 	
 	def _Request(self, url, method="GET"):
@@ -49,7 +44,7 @@ class Oneliner(object):
 		otherwise None (in async mode)
 		"""
 		# TODO: exception handling
-		self.connection.request(method, self.baseUrl + url)
+		self.connection.request(method, self.basePath + url)
 		return self.connection.getresponse()
 	
 	def Monitor(self):
