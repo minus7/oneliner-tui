@@ -9,52 +9,52 @@ from oneliner import Oneliner
 class OnelinerTwisted(Oneliner):
 	"""
 	Subclass of Oneliner using twisted's async http client
-	_Request/Monitor/GetNewLines return Deferreds
+	_request/monitor/get_new_lines return Deferreds
 	"""
 	
-	def __init__(self, baseUrl, historyLength=50, reactor=None):
+	def __init__(self, base_url, history_length=50, reactor=None):
 		# use the standard python logging module
 		PythonLoggingObserver().start()
 		
-		self._Setup(baseUrl, historyLength)
+		self._setup(base_url, history_length)
 		
 		#if not reactor:
 		#	from twisted.internet import reactor as reactor_
 		#	reactor = reactor_
 		#self.reactor = reactor
-		#pool = HTTPConnectionPool(self.eventLoop.reactor, persistent=True)
+		#pool = HTTPConnectionPool(self.event_loop.reactor, persistent=True)
 		#pool.maxPersistentPerHost = 1
-		#self.agent = Agent(self.eventLoop.reactor, pool=pool)
+		#self.agent = Agent(self.event_loop.reactor, pool=pool)
 		
-		self.log.info(u"OnelinerTwisted initialized")
+		self._log.info(u"OnelinerTwisted initialized")
 	
-	def _LogErrback(self, error):
-		self.log.error(str(error))
+	def _log_errback(self, error):
+		self._log.error(str(error))
 		return error
 		
-	def _Request(self, url, method="GET", data=None):
-		responseDeferred = getPage(self.baseUrl + url, method=method, postdata=data)
-		responseDeferred.addErrback(self._LogErrback)
-		return responseDeferred
+	def _request(self, url, method="GET", data=None):
+		deferred_response = getPage(self.base_url + url, method=method, postdata=data)
+		deferred_response.addErrback(self._log_errback)
+		return deferred_response
 	
-	def Monitor(self):
-		self.log.debug(u"Monitor called")
-		deferredRequest = self._Request("/demovibes/ajax/monitor/{}/".format(self.nextEvent))
-		def MonitorDone(data):
-			if self.ParseMonitor(data):
-				self.log.debug(u"New lines available, switching to GetNewLines")
-				self.GetNewLines()
+	def monitor(self):
+		self._log.debug(u"monitor called")
+		deferred_request = self._request("/demovibes/ajax/monitor/{}/".format(self.next_event))
+		def monitor_done(data):
+			if self.parse_monitor(data):
+				self._log.debug(u"New lines available, switching to get_new_lines")
+				self.get_new_lines()
 			else:
-				self.log.debug(u"No new lines available, retrying")
-				self.Monitor()
-		deferredRequest.addCallback(MonitorDone)
+				self._log.debug(u"No new lines available, retrying")
+				self.monitor()
+		deferred_request.addCallback(monitor_done)
 	
-	def GetNewLines(self):
-		self.log.debug(u"GetNewLines called")
-		deferredRequest = self._Request("/demovibes/xml/oneliner/")
-		def GetNewLinesDone(data):
-			if self.ParseOneliner(data):
-				self.log.debug(u"New lines received, switching to monitor mode")
+	def get_new_lines(self):
+		self._log.debug(u"get_new_lines called")
+		deferred_request = self._request("/demovibes/xml/oneliner/")
+		def get_new_lines_done(data):
+			if self.parse_oneliner(data):
+				self._log.debug(u"New lines received, switching to monitor mode")
 				self._modified()
-			self.Monitor()
-		deferredRequest.addCallback(GetNewLinesDone)
+			self.monitor()
+		deferred_request.addCallback(get_new_lines_done)

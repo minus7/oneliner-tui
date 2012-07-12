@@ -7,7 +7,7 @@ if __name__ == "__main__":
 	o = Oneliner("http://www.scenemusic.net/")
 
 	while True:
-		lines = o.GetNewLines()
+		lines = o.get_new_lines()
 		
 		for line in lines:
 			print(u"[{}] {}: {}".format(line.time, line.author, line.message))

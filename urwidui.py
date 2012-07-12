@@ -6,4 +6,4 @@ if __name__ == "__main__":
 
 	o = OnelinerUIUrwid("http://www.scenemusic.net/")
 
-	o.Run()
+	o.run()

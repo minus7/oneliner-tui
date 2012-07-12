@@ -12,25 +12,26 @@ class OnelinerMessage(object):
 		self.time = time
 
 class Oneliner(object):
-	def __init__(self, baseUrl, historyLength=50):
-		self._Setup(baseUrl, historyLength)
+	def __init__(self, base_url, history_length=50):
+		self._setup(base_url, history_length)
 		
-		urlInfo = urlparse(baseUrl)
-		self.basePath = urlInfo.path
-		self.connection = HTTPConnection(urlInfo.netloc)
+		url_info = urlparse(base_url)
+		self.base_path = url_info.path
+		self.connection = HTTPConnection(url_info.netloc)
 		
-		self.log.info(u"Oneliner initialized")
+		self._log.info(u"Oneliner initialized")
 	
-	def _Setup(self, baseUrl, historyLength):
+	def _setup(self, base_url, history_length):
 		"""
-		historyLength: how many onelines to keep in the buffer
-		baseUrl: url to the base of the demovibes installation
+		history_length: how many onelines to keep in the buffer
+		base_url: url to the base of the demovibes installation
 		"""
-		self.log = logging.getLogger(self.__class__.__name__)
-		self.baseUrl = baseUrl
+		self._log = logging.getLogger(self.__class__.__name__)
+		self.base_url = base_url
 		self.history = []
-		self.historyLength = historyLength
-		self.nextEvent = 0
+		self.history_length = history_length
+		self.next_event = 0
+		self.loggedIn = False
 	
 	def Login(self, username, password):
 		raise NotImplementedError(u"Login not implemented")
@@ -38,47 +39,47 @@ class Oneliner(object):
 	def Send(self, message):
 		raise NotImplementedError(u"Sending not implemented")
 	
-	def _Request(self, url, method="GET"):
+	def _request(self, url, method="GET"):
 		"""
 		returns a HTTPResponse object when ready,
 		otherwise None (in async mode)
 		"""
 		# TODO: exception handling
-		self.connection.request(method, self.basePath + url)
+		self.connection.request(method, self.base_path + url)
 		return self.connection.getresponse()
 	
-	def Monitor(self):
+	def monitor(self):
 		"""
 		returns True if new lines are available
 		returns None if the request failed
 		"""
-		response = self._Request("/demovibes/ajax/monitor/{}/".format(self.nextEvent))
+		response = self._request("/demovibes/ajax/monitor/{}/".format(self.next_event))
 		if not response:
 			return None
 		
 		data = response.read()
-		return self.ParseMonitor(data)
+		return self.parse_monitor(data)
 	
-	def ParseMonitor(self, data):
+	def parse_monitor(self, data):
 		lines = data.splitlines()
 		
 		# find next event ID
-		oldEvent = self.nextEvent
+		old_event = self.next_event
 		# future remark: ord("!") required in python 3
 		if lines[-1][0] == "!":
-			self.nextEvent = int(lines[-1][1:])
-			self.log.debug(u"Next event ID: {}".format(self.nextEvent))
+			self.next_event = int(lines[-1][1:])
+			self._log.debug(u"Next event ID: {}".format(self.next_event))
 		else:
-			self.log.warning(u"Couldn't find the next event ID in message")
-			self.log.debug(u"Event data: {}".format(repr(data)))
+			self._log.warning(u"Couldn't find the next event ID in message")
+			self._log.debug(u"Event data: {}".format(repr(data)))
 		
-		if u"oneliner" in lines or oldEvent == 0:
+		if u"oneliner" in lines or old_event == 0:
 			return True
 		else:
-			self.log.debug(u"No oneliner event, retrying")
+			self._log.debug(u"No oneliner event, retrying")
 			return False
 	
-	def ParseOneliner(self, data):
+	def parse_oneliner(self, data):
 		"""
 		parse oneliner XML
 		"""
@@ -86,52 +87,52 @@ class Oneliner(object):
 		try:
 			oneliner = ElementTree.fromstring(data)
 		except ElementTree.ParseError as e:
-			self.log.error(u"Oneliner XML parsing failed: {}".format(str(e)))
+			self._log.error(u"Oneliner XML parsing failed: {}".format(str(e)))
 			return []
 		
-		self.log.debug(u"Oneliner data: {}...".format(repr(data[:20])))
+		self._log.debug(u"Oneliner data: {}...".format(repr(data[:20])))
 		
-		newLines = []
+		new_lines = []
 		for msg in oneliner.iterfind('entry'):
 			# parses "Sun, 12 Feb 2012 01:00:48 +0100" (date offset is cut off for now)
 			# TODO: timezone offset parsing?
-			msgTime = datetime.datetime.strptime(msg.get('time')[:-6], "%a, %d %b %Y %H:%M:%S")
-			msgAuthor = msg.find('author').text
-			msgText = msg.find('message').text
+			msg_time = datetime.datetime.strptime(msg.get('time')[:-6], "%a, %d %b %Y %H:%M:%S")
+			msg_author = msg.find('author').text
+			msg_text = msg.find('message').text
 			if len(self.history) > 0 and \
-				self.history[-1].time == msgTime and \
-				self.history[-1].author == msgAuthor and \
-				self.history[-1].message == msgText:
+				self.history[-1].time == msg_time and \
+				self.history[-1].author == msg_author and \
+				self.history[-1].message == msg_text:
 				break
-			newLines.append(OnelinerMessage(msgAuthor, msgText, msgTime))
+			new_lines.append(OnelinerMessage(msg_author, msg_text, msg_time))
 		
 		# get the new stuff into the right order
-		newLines.reverse()
+		new_lines.reverse()
 		# append new stuff, removing old lines if necesssary
-		self.history = self.history[-self.historyLength+len(newLines):] + newLines
-		self.log.debug(u"Added {} new lines".format(len(newLines)))
+		self.history = self.history[-self.history_length+len(new_lines):] + new_lines
+		self._log.debug(u"Added {} new lines".format(len(new_lines)))
 		
-		return newLines
+		return new_lines
 	
-	def GetNewLines(self):
+	def get_new_lines(self):
 		"""
 		receives new oneliner data and returns new lines only
 		returns None if the request failed
 		"""
-		response = self._Request("/demovibes/xml/oneliner/")
+		response = self._request("/demovibes/xml/oneliner/")
 		if not response:
 			return None
 		
-		return self.ParseOneliner(response.read())
+		return self.parse_oneliner(response.read())
 	
-	def GetLines(self, lines=10, block=False):
+	def get_lines(self, lines=10, block=False):
 		"""
 		returns the last `lines` lines (default: 10)
 		waits for the requested amount of lines
 		to be buffered if `block` is True
 		"""
 		while block and len(self.history) < lines:
-			self.GetNewLines()
+			self.get_new_lines()
 		
 		return self.history[-lines:]
 
