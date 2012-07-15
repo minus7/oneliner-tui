@@ -4,6 +4,7 @@ import datetime
 from xml.etree import ElementTree
 import logging
 from urlparse import urlparse
+from urllib import urlencode
 
 class OnelinerMessage(object):
 	def __init__(self, author, message, time):
@@ -31,44 +32,83 @@ class Oneliner(object):
 		self.history = []
 		self.history_length = history_length
 		self.next_event = 0
-		self.loggedIn = False
+		self.logged_in = False
+		self.cookies = None
 	
-	def Login(self, username, password):
-		raise NotImplementedError(u"Login not implemented")
-	
-	def Send(self, message):
-		raise NotImplementedError(u"Sending not implemented")
-	
-	def _request(self, url, method="GET"):
+	def _request(self, url, method="GET", data=None):
 		"""
 		returns a HTTPResponse object when ready,
 		otherwise None (in async mode)
 		"""
 		# TODO: exception handling
-		self.connection.request(method, self.base_path + url)
+		if self.logged_in:
+			cookie_list = ["{}={}".format(k, v) for k, v in self.cookies.iteritems()]
+			headers = {'Cookie': "; ".join(cookie_list)}
+		else:
+			headers = {}
+		self.connection.request(method, self.base_path + url, data, headers)
 		return self.connection.getresponse()
 	
-	def monitor(self):
-		"""
-		returns True if new lines are available
-		returns None if the request failed
-		"""
-		response = self._request("/demovibes/ajax/monitor/{}/".format(self.next_event))
+	def login(self, username, password):
+		data = urlencode({'username': username, 'password': password})
+		response = self._request("/account/signin/", method="POST", data=data)
 		if not response:
 			return None
 		
 		data = response.read()
-		return self.parse_monitor(data)
+		
+		if u"Please correct errors" in data:
+			self._log.warning("Login failed")
+			self._log.debug(data)
+			self.logged_in = False
+			return False
+		
+		cookies = {}
+		for name, value in response.getheaders():
+			if name == "set-cookie":
+				cookie = value.partition(';')[0].partition('=')
+				cookies[cookie[0]] = cookie[1]
+		
+		if not "sessionid" in cookies:
+			self.logged_in = False
+			self._log.warning("Login failed")
+			self._log.debug("Couldn't find cookie, dumping headers")
+			for name, value in response.getheaders():
+				self._log.debug("header: '{}: {}'".format(name, value))
+			return False
+		
+		self.cookies = cookies
+		self._log.debug("Cookie: {}".format(cookie))
+		
+		self._log.info("Logged in as '{}'".format(username))
+		self.logged_in = True
+		return True
+	
+	def send(self, message):
+		if not self.logged_in:
+			return False
+		
+		response = self._request("/demovibes/ajax/oneliner_submit/",
+		                         method="POST", data=urlencode({'Line': message}))
+		if not response:
+			return None
+		
+		self._log.debug(response.read())
+		return True
 	
 	def parse_monitor(self, data):
 		lines = data.splitlines()
+		# last event should be first
+		lines.reverse()
 		
 		# find next event ID
 		old_event = self.next_event
 		# future remark: ord("!") required in python 3
-		if lines[-1][0] == "!":
-			self.next_event = int(lines[-1][1:])
-			self._log.debug(u"Next event ID: {}".format(self.next_event))
+		if len(lines) > 0:
+			for line in lines:
+				if len(line) > 0 and line[0] == "!":
+					self.next_event = int(line[1:])
+					self._log.debug(u"Next event ID: {}".format(self.next_event))
 		else:
 			self._log.warning(u"Couldn't find the next event ID in message")
 			self._log.debug(u"Event data: {}".format(repr(data)))
@@ -94,7 +134,7 @@ class Oneliner(object):
 		
 		new_lines = []
 		for msg in oneliner.iterfind('entry'):
-			# parses "Sun, 12 Feb 2012 01:00:48 +0100" (date offset is cut off for now)
+			# parses "Sun, 12 Feb 2012 01:00:48 +0100" (timezone offset is cut off for now)
 			# TODO: timezone offset parsing?
 			msg_time = datetime.datetime.strptime(msg.get('time')[:-6], "%a, %d %b %Y %H:%M:%S")
 			msg_author = msg.find('author').text
@@ -114,11 +154,28 @@ class Oneliner(object):
 		
 		return new_lines
 	
-	def get_new_lines(self):
+	def monitor(self):
+		"""
+		returns True if new lines are available
+		returns None if the request failed
+		"""
+		response = self._request("/demovibes/ajax/monitor/{}/".format(self.next_event))
+		if not response:
+			return None
+		
+		data = response.read()
+		return self.parse_monitor(data)
+	
+	def get_new_lines(self, block=False):
 		"""
 		receives new oneliner data and returns new lines only
 		returns None if the request failed
 		"""
+		
+		# wait for oneliner data to be present
+		if block:
+			while not self.monitor():
+				pass
 		response = self._request("/demovibes/xml/oneliner/")
 		if not response:
 			return None

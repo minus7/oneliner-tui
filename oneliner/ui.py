@@ -73,8 +73,8 @@ class OnelinerUIUrwid(object):
 	def __init__(self, base_url, history_length=500):
 		self._log = logging.getLogger(self.__class__.__name__)
 		
-		self.commandIndex = 0
-		self.commandHistory = [u""]
+		self.command_index = 0
+		self.command_history = [u""]
 		
 		self.event_loop = urwid.TwistedEventLoop()
 		
@@ -113,7 +113,9 @@ class OnelinerUIUrwid(object):
 			else:
 				self._log.debug(u"unhandled input: {}".format(key))
 		
-		self.loop = urwid.MainLoop(frame, palette, unhandled_input=uhi, event_loop=self.event_loop)
+		self.loop = urwid.MainLoop(frame, palette, unhandled_input=uhi,
+		                           event_loop=self.event_loop,
+		                           handle_mouse=False)
 		
 		self._log.info(u"Oneliner curses frontend initialized")
 		
@@ -123,35 +125,35 @@ class OnelinerUIUrwid(object):
 		self.loop.run()
 	
 	def command_history_prev(self):
-		if self.commandIndex > 0:
-			self.commandIndex -= 1
-			self.input.set_edit_text(self.commandHistory[self.commandIndex])
-			self.input.set_edit_pos(len(self.commandHistory[self.commandIndex]))
+		if self.command_index > 0:
+			self.command_index -= 1
+			self.input.set_edit_text(self.command_history[self.command_index])
+			self.input.set_edit_pos(len(self.command_history[self.command_index]))
 	
 	def command_history_next(self):
-		if self.commandIndex < len(self.commandHistory) - 1:
-			self.commandIndex += 1
-			self.input.set_edit_text(self.commandHistory[self.commandIndex])
-			self.input.set_edit_pos(len(self.commandHistory[self.commandIndex]))
+		if self.command_index < len(self.command_history) - 1:
+			self.command_index += 1
+			self.input.set_edit_text(self.command_history[self.command_index])
+			self.input.set_edit_pos(len(self.command_history[self.command_index]))
 	
 	def command_change(self, edit, text):
 		# remember changes the the current line
 		# changes made to previous lines decay immediately
-		if self.commandIndex == len(self.commandHistory) - 1:
-			self.commandHistory[self.commandIndex] = text
+		if self.command_index == len(self.command_history) - 1:
+			self.command_history[self.command_index] = text
 	
 	def command_enter(self, edit, text):
 		if len(text) == 0:
 			return
-		if not self.oneliner.loggedIn:
+		if not self.oneliner.logged_in:
 			self.login_promt()
 			return
-		self.commandIndex = len(self.commandHistory)
-		self.commandHistory[self.commandIndex - 1] = text
-		self.commandHistory.append(u"")
+		self.command_index = len(self.command_history)
+		self.command_history[self.command_index - 1] = text
+		self.command_history.append(u"")
 		edit.set_edit_text(u"")
 		self.oneliner.set_focus("end")
-		# TODO: actually send stuff
+		self.oneliner.send(text)
 	
 	def login_promt():
 		pass
