@@ -47,27 +47,35 @@ class OnelinerUrwid(OnelinerTwisted, urwid.ListWalker):
 		# ListWalker focus
 		self.focus = 'end'
 	
-	def _GetAtPos(self, position):
+	# TODO
+	COLORS = ['']
+	def nick_colorize(self, nick):
+		hash = 0
+		for char in nick:
+			hash += ord(char)
+		return self.COLORS[hash % len(self.COLORS)] + nick + self.COLORS[0]
+	
+	def _get_at_pos(self, position):
 		if position == 'end':
 			position = len(self.history) - 1
 		if position < 0 or position >= len(self.history):
 			return (None, None)
 		msg = self.history[position]
-		text = u"[{}] {}: {}".format(msg.time, msg.author, msg.message)
+		text = u"[{}] {}: {}".format(msg.time, self.nick_colorize(msg.author), msg.message)
 		return (urwid.Text(text), position)
 	
 	def get_focus(self):
-		return self._GetAtPos(self.focus)
+		return self._get_at_pos(self.focus)
 	
 	def set_focus(self, focus):
 		self.focus = focus
 		self._modified()
 	
 	def get_next(self, position):
-		return self._GetAtPos(position + 1)
+		return self._get_at_pos(position + 1)
 	
 	def get_prev(self, position):
-		return self._GetAtPos(position - 1)
+		return self._get_at_pos(position - 1)
 
 class OnelinerUIUrwid(object):
 	def __init__(self, base_url, history_length=500):
